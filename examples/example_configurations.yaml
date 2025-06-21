@@ -1,0 +1,437 @@
+# =============================================================================
+# MINIMAL DEVELOPMENT CONFIGURATION (examples/minimal.yaml)
+# =============================================================================
+project_name: "vectorweight-dev"
+environment: "development"
+deployment_mode: "internet"
+deployment_target: "direct"
+
+clusters:
+  - name: "dev"
+    domain: "dev.vectorweight.local"
+    size: "minimal"
+    gpu_enabled: false
+    vector_store: "disabled"
+    cerbos_enabled: false
+    specialized_workloads:
+      - "development"
+      - "testing"
+
+# Infrastructure settings
+enable_security_cluster: false
+enable_cerbos_global: false
+enable_mcp: false
+enable_gpu_operator: false
+
+# Repository settings
+github_organization: "vectorweight"
+auto_create_repositories: true
+base_domain: "vectorweight.local"
+metallb_ip_range: "192.168.1.200-192.168.1.210"
+
+# Deployment settings
+sync_policy: "automated"
+enable_webhooks: false
+
+---
+# =============================================================================
+# PRODUCTION FULL CONFIGURATION (examples/production.yaml)
+# =============================================================================
+project_name: "vectorweight-production"
+environment: "production"
+deployment_mode: "internet"
+deployment_target: "vms"
+
+clusters:
+  - name: "dev-cluster"
+    domain: "dev.vectorweight.com"
+    size: "small"
+    gpu_enabled: false
+    vector_store: "disabled"
+    cerbos_enabled: false
+    specialized_workloads:
+      - "development"
+      - "testing"
+    custom_values:
+      cilium:
+        hubble:
+          ui:
+            enabled: false
+
+  - name: "ai-cluster"
+    domain: "ai.vectorweight.com"
+    size: "large"
+    gpu_enabled: true
+    vector_store: "weaviate"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "machine-learning"
+      - "ai-inference"
+      - "model-training"
+      - "vector-processing"
+    custom_values:
+      weaviate:
+        replicas: 3
+        modules:
+          text2vec-transformers:
+            enabled: true
+          generative-openai:
+            enabled: true
+
+  - name: "homelab-cluster"
+    domain: "homelab.vectorweight.com"
+    size: "medium"
+    gpu_enabled: false
+    vector_store: "disabled"
+    cerbos_enabled: false
+    specialized_workloads:
+      - "general-purpose"
+      - "web-services"
+      - "applications"
+      - "media-services"
+
+  - name: "security-cluster"
+    domain: "sec.vectorweight.com"
+    size: "small"
+    gpu_enabled: false
+    vector_store: "disabled"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "security"
+      - "monitoring"
+      - "observability"
+      - "audit"
+    custom_values:
+      prometheus:
+        prometheus:
+          prometheusSpec:
+            retention: "90d"
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  resources:
+                    requests:
+                      storage: "100Gi"
+
+# Advanced features
+enable_security_cluster: true
+enable_cerbos_global: true
+enable_mcp: true
+enable_gpu_operator: true
+
+# Repository management
+github_organization: "vectorweight"
+auto_create_repositories: true
+base_domain: "vectorweight.com"
+metallb_ip_range: "192.168.1.200-192.168.1.250"
+
+# GitOps settings
+sync_policy: "automated"
+enable_webhooks: true
+
+# Global overrides
+global_overrides:
+  domain: "vectorweight.com"
+  timezone: "America/New_York"
+  storageClass: "openebs-hostpath"
+  monitoring:
+    enabled: true
+    retention: "30d"
+  security:
+    networkPolicies: true
+    podSecurityStandards: true
+  imageRegistry:
+    pullPolicy: "IfNotPresent"
+
+---
+# =============================================================================
+# AIRGAPPED ENTERPRISE CONFIGURATION (examples/airgapped.yaml)
+# =============================================================================
+project_name: "vectorweight-enterprise"
+environment: "production"
+deployment_mode: "airgapped-vc"
+deployment_target: "vms"
+
+# Airgapped source configuration
+source:
+  mode: "airgapped-vc"
+  url: "https://git.internal.vectorweight.com/infrastructure/k8s-configs"
+  username: "${GIT_USERNAME}"
+  token: "${GIT_TOKEN}"
+  ca_certificate_path: "/etc/ssl/certs/internal-ca.crt"
+  verification_enabled: true
+  archive_format: "tar.gz"
+
+clusters:
+  - name: "ai-cluster"
+    domain: "ai.internal.vectorweight.com"
+    size: "large"
+    gpu_enabled: true
+    vector_store: "weaviate"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "machine-learning"
+      - "secure-ai"
+      - "confidential-computing"
+    custom_values:
+      weaviate:
+        authentication:
+          enabled: true
+          anonymous_access_enabled: false
+        authorization:
+          enabled: true
+          admin_list:
+            - "admin@vectorweight.internal"
+            - "ai-team@vectorweight.internal"
+        backup:
+          enabled: true
+          schedule: "0 2 * * *"
+          retention: "90d"
+
+  - name: "security-cluster"
+    domain: "sec.internal.vectorweight.com"
+    size: "medium"
+    gpu_enabled: false
+    vector_store: "disabled"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "security-operations"
+      - "monitoring"
+      - "audit"
+      - "compliance"
+    custom_values:
+      cerbos:
+        audit:
+          enabled: true
+          backend: "postgres"
+          retention_period: "2y"
+        postgres:
+          enabled: true
+          ssl_mode: "require"
+
+# Enterprise security settings
+enable_security_cluster: true
+enable_cerbos_global: true
+enable_mcp: false  # Disabled for airgapped environments
+enable_gpu_operator: true
+
+# Internal repository settings
+github_organization: "vectorweight-enterprise"
+auto_create_repositories: false  # Manual repo management in enterprise
+base_domain: "internal.vectorweight.com"
+metallb_ip_range: "10.0.100.200-10.0.100.250"
+
+# Secure deployment settings
+sync_policy: "manual"  # Manual approval for enterprise
+enable_webhooks: false
+
+# Enterprise global overrides
+global_overrides:
+  domain: "internal.vectorweight.com"
+  timezone: "UTC"
+  storageClass: "fast-ssd"
+  monitoring:
+    enabled: true
+    retention: "180d"
+    alerting:
+      enabled: true
+      severity_threshold: "warning"
+  security:
+    networkPolicies: true
+    podSecurityStandards: true
+    defaultDenyAll: true
+    encryptionAtRest: true
+    encryptionInTransit: true
+  compliance:
+    frameworks:
+      - "cis-kubernetes"
+      - "nist-800-53"
+      - "iso-27001"
+  imageRegistry:
+    internal: "registry.internal.vectorweight.com"
+    pullPolicy: "Always"
+    scanningRequired: true
+
+---
+# =============================================================================
+# VECTOR STORE FOCUSED CONFIGURATION (examples/vector-stores.yaml)
+# =============================================================================
+project_name: "vectorweight-ai-research"
+environment: "research"
+deployment_mode: "internet"
+deployment_target: "vms"
+
+clusters:
+  - name: "weaviate-cluster"
+    domain: "weaviate.vectorweight.com"
+    size: "large"
+    gpu_enabled: true
+    vector_store: "weaviate"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "vector-search"
+      - "semantic-search"
+      - "recommendation-systems"
+    custom_values:
+      weaviate:
+        replicas: 5
+        resources:
+          requests:
+            memory: "16Gi"
+            cpu: "4"
+          limits:
+            memory: "32Gi"
+            cpu: "8"
+        persistence:
+          size: "1Ti"
+        modules:
+          text2vec-transformers:
+            enabled: true
+          text2vec-openai:
+            enabled: true
+          generative-openai:
+            enabled: true
+          qna-transformers:
+            enabled: true
+          ref2vec-centroid:
+            enabled: true
+
+  - name: "qdrant-cluster"
+    domain: "qdrant.vectorweight.com"
+    size: "medium"
+    gpu_enabled: false
+    vector_store: "qdrant"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "fast-similarity-search"
+      - "real-time-recommendations"
+    custom_values:
+      qdrant:
+        replicaCount: 3
+        config:
+          cluster:
+            enabled: true
+          storage:
+            performance:
+              max_search_threads: 8
+
+  - name: "chroma-dev"
+    domain: "chroma.vectorweight.com"
+    size: "small"
+    gpu_enabled: false
+    vector_store: "chroma-memory"
+    cerbos_enabled: false
+    specialized_workloads:
+      - "prototyping"
+      - "development"
+      - "testing"
+
+# AI/ML focused settings
+enable_security_cluster: true
+enable_cerbos_global: true
+enable_mcp: true
+enable_gpu_operator: true
+
+github_organization: "vectorweight-research"
+auto_create_repositories: true
+base_domain: "vectorweight.com"
+
+# Optimized for AI workloads
+global_overrides:
+  storageClass: "fast-nvme"
+  monitoring:
+    enabled: true
+    retention: "60d"
+    ai_metrics:
+      enabled: true
+      vector_store_metrics: true
+      gpu_metrics: true
+  networking:
+    high_throughput: true
+    low_latency: true
+
+---
+# =============================================================================
+# CERBOS AUTHORIZATION CONFIGURATION (examples/cerbos-auth.yaml)
+# =============================================================================
+project_name: "vectorweight-secure"
+environment: "production"
+deployment_mode: "internet"
+deployment_target: "vms"
+
+clusters:
+  - name: "ai-secure"
+    domain: "ai-secure.vectorweight.com"
+    size: "large"
+    gpu_enabled: true
+    vector_store: "weaviate"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "secure-ai"
+      - "confidential-ml"
+    custom_values:
+      cerbos:
+        replicas: 3
+        audit:
+          enabled: true
+          backend: "postgres"
+          retention_period: "2y"
+        postgres:
+          enabled: true
+          host: "cerbos-postgres.authorization.svc.cluster.local"
+          ssl_mode: "require"
+        policy:
+          repository:
+            url: "https://github.com/vectorweight/cerbos-policies"
+            branch: "main"
+            update_interval: "30s"
+        jwt:
+          verification:
+            enabled: true
+            issuers:
+              - issuer: "https://auth.vectorweight.com"
+                audience: "vectorweight-services"
+              - issuer: "https://keycloak.vectorweight.com"
+                audience: "kubernetes-api"
+
+  - name: "auth-cluster"
+    domain: "auth.vectorweight.com"
+    size: "small"
+    gpu_enabled: false
+    vector_store: "disabled"
+    cerbos_enabled: true
+    specialized_workloads:
+      - "authentication"
+      - "authorization"
+      - "identity-management"
+
+# Maximum security configuration
+enable_security_cluster: true
+enable_cerbos_global: true
+enable_mcp: false
+enable_gpu_operator: true
+
+github_organization: "vectorweight-secure"
+auto_create_repositories: true
+base_domain: "vectorweight.com"
+
+global_overrides:
+  security:
+    networkPolicies: true
+    podSecurityStandards: true
+    defaultDenyAll: true
+    rbac:
+      strict: true
+    admission_controllers:
+      - "PodSecurityPolicy"
+      - "OPA-Gatekeeper"
+    image_scanning:
+      enabled: true
+      block_vulnerabilities: true
+  compliance:
+    frameworks:
+      - "cis-kubernetes"
+      - "pci-dss"
+      - "hipaa"
+    audit_logging: true
+    policy_enforcement: "strict"
