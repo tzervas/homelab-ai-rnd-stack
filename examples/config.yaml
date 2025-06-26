@@ -1,0 +1,65 @@
+# Example VectorWeight Homelab Configuration
+# This configuration sets up a development environment with AI/ML capabilities
+
+project_name: "ai-dev-homelab"
+environment: "development"
+deployment_mode: "internet"
+
+# Cluster Configuration
+clusters:
+  - name: "dev"
+    domain: "dev.homelab.local"
+    size: "minimal"
+    gpu_enabled: false
+    vector_store: "disabled"
+    
+  - name: "ai-cluster"
+    domain: "ai.homelab.local"
+    size: "medium"
+    gpu_enabled: true
+    vector_store: "weaviate"
+    specialized_workloads:
+      - "machine-learning"
+      - "ai-inference"
+
+# Infrastructure Settings
+use_vms: false  # Deploy directly on hardware
+cluster_size_default: "small"
+
+# Security Features
+enable_cerbos: false
+enable_security_cluster: true
+
+# AI/ML Settings
+vector_store_default: "disabled"
+enable_mcp: false  # Management Control Plane
+enable_adk: true   # Application Development Kit
+
+# GitOps Configuration
+github_org: "vectorweight"
+auto_create_repos: true
+sync_policy: "automated"
+
+# Network Settings
+domain: "homelab.local"
+ip_pool_start: "192.168.0.200"
+ip_pool_end: "192.168.0.250"
+
+# Additional Overrides
+overrides:
+  metallb:
+    ip_range: "192.168.0.200-192.168.0.210"
+  
+  ingress:
+    default_tls_secret: "ingress-tls"
+    
+  monitoring:
+    retention_days: 30
+    grafana:
+      admin_password: "${GRAFANA_ADMIN_PASSWORD}"
+    
+  jupyter:
+    resource_quota:
+      cpu: "4"
+      memory: "16Gi"
+    default_image: "jupyter/scipy-notebook:python-3.12"

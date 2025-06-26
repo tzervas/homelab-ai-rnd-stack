@@ -1,7 +1,30 @@
 #!/usr/bin/env python3
 """
-Enhanced VectorWeight Homelab Configuration Schema
-Simplified, concise configuration for comprehensive deployment automation
+VectorWeight Homelab Configuration Schema.
+
+This module defines the configuration schema for the VectorWeight Homelab deployment system.
+It provides a type-safe, validated configuration structure that supports various deployment
+scenarios from minimal development setups to full production environments.
+
+Key Features:
+    - Type-safe configuration with dataclasses and enums
+    - Support for multiple deployment modes (internet-connected and air-gapped)
+    - Flexible cluster sizing and capabilities
+    - Integrated vector store configuration
+    - Security and access control settings
+
+Typical usage example:
+    ```python
+    from vectorweight.config.schema import VectorWaveConfig, ClusterConfig, ClusterSize
+    
+    config = VectorWaveConfig(
+        clusters=[ClusterConfig(
+            name="dev",
+            domain="dev.example.com",
+            size=ClusterSize.MINIMAL
+        )]
+    )
+    ```
 """
 
 from dataclasses import dataclass, field
@@ -10,7 +33,18 @@ from pathlib import Path
 from enum import Enum
 
 class DeploymentMode(Enum):
-    """Deployment mode options"""
+    """Deployment mode options for VectorWeight Homelab.
+    
+    Defines the available deployment modes that determine how the system
+    will be deployed and how it will access required resources.
+    
+    Attributes:
+        INTERNET: Standard internet-connected deployment with direct access to resources
+        AIRGAPPED_VC: Air-gapped deployment using version control for package distribution
+        AIRGAPPED_LOCAL: Air-gapped deployment using local filesystem resources
+        AIRGAPPED_NETWORK: Air-gapped deployment using internal network resources
+        AIRGAPPED_ARCHIVE: Air-gapped deployment using pre-packaged archive files
+    """
     INTERNET = "internet"
     AIRGAPPED_VC = "airgapped-vc" 
     AIRGAPPED_LOCAL = "airgapped-local"
@@ -18,14 +52,50 @@ class DeploymentMode(Enum):
     AIRGAPPED_ARCHIVE = "airgapped-archive"
 
 class ClusterSize(Enum):
-    """Cluster deployment size options"""
+    """Cluster deployment size options defining resource allocations and feature sets.
+    
+    Determines the scale of the deployment and which features are enabled by default.
+    Each size option comes with predefined resource allocations and capability sets.
+    
+    Attributes:
+        MINIMAL: Single node deployment with basic features
+            - Suitable for development and testing
+            - Limited resource allocation
+            - Core services only
+        
+        SMALL: 2-3 node deployment with standard features
+            - Suitable for small teams
+            - Moderate resource allocation
+            - Basic HA configuration
+        
+        MEDIUM: 3-5 node deployment with full feature set
+            - Suitable for development teams
+            - Enhanced resource allocation
+            - Full HA configuration
+        
+        LARGE: 5+ node deployment with enterprise features
+            - Suitable for organization-wide use
+            - Maximum resource allocation
+            - Advanced features and integrations
+    """
     MINIMAL = "minimal"      # Single node, basic features
     SMALL = "small"         # 2-3 nodes, standard features
     MEDIUM = "medium"       # 3-5 nodes, full features
     LARGE = "large"         # 5+ nodes, enterprise features
 
 class VectorStoreType(Enum):
-    """Vector store implementation options"""
+    """Vector store implementation options for AI/ML workloads.
+    
+    Defines the available vector store backends that can be used for
+    storing and querying vector embeddings in AI/ML workloads.
+    
+    Attributes:
+        DISABLED: No vector store functionality
+        WEAVIATE: Weaviate vector database (https://weaviate.io/)
+        QDRANT: Qdrant vector database (https://qdrant.tech/)
+        CHROMA: ChromaDB vector database (https://www.trychroma.com/)
+        IN_MEMORY: Simple in-memory vector store for testing
+    """
     DISABLED = "disabled"
     WEAVIATE = "weaviate"
     QDRANT = "qdrant" 
@@ -34,7 +104,22 @@ class VectorStoreType(Enum):
 
 @dataclass
 class SourceConfig:
-    """Source configuration for airgapped deployments"""
+    """Source configuration for air-gapped deployments.
+    
+    Defines how resources should be accessed in air-gapped environments
+    where direct internet access is not available.
+    
+    Attributes:
+        type: The deployment mode determining how resources are accessed
+        url: Optional URL for accessing resources (e.g., internal mirror)
+        path: Optional filesystem path for local resources
+        username: Optional username for authenticated access
+        password: Optional password for authenticated access
+        token: Optional access token for authenticated access
+        ca_cert: Optional CA certificate for SSL/TLS verification
+        archive_format: Format for archived resources (default: tar.gz)
+        verification_enabled: Whether to verify resource integrity
+    """
     type: DeploymentMode
     url: Optional[str] = None
     path: Optional[Path] = None
@@ -45,9 +130,22 @@ class SourceConfig:
     archive_format: Optional[str] = "tar.gz"
     verification_enabled: bool = True
 
-@dataclass 
+@dataclass
 class ClusterConfig:
-    """Simplified cluster configuration"""
+    """Configuration for an individual Kubernetes cluster.
+    
+    Defines the characteristics and capabilities of a single cluster
+    within the VectorWeight Homelab deployment.
+    
+    Attributes:
+        name: Unique identifier for the cluster
+        domain: Domain name for cluster ingress
+        size: Deployment size determining resources and features
+        gpu_enabled: Whether GPU support should be enabled
+        vector_store: Vector store implementation to use
+        cerbos_enabled: Whether to enable Cerbos authorization
+        specialized_workloads: List of special workload types to enable
+    """
     name: str
     domain: str
     size: ClusterSize = ClusterSize.SMALL
@@ -58,7 +156,33 @@ class ClusterConfig:
     
 @dataclass
 class VectorWaveConfig:
-    """Main configuration for VectorWeight Homelab deployment"""
+    """Main configuration for VectorWeight Homelab deployment.
+    
+    Top-level configuration class that defines all aspects of a
+    VectorWeight Homelab deployment including clusters, infrastructure,
+    security, and feature enablement.
+    
+    Attributes:
+        project_name: Name identifier for the deployment
+        environment: Deployment environment (e.g., production, staging)
+        deployment_mode: How the system will be deployed
+        clusters: List of cluster configurations
+        source: Configuration for air-gapped deployments
+        use_vms: Whether to deploy on VMs or bare metal
+        cluster_size_default: Default size for new clusters
+        enable_cerbos: Whether to enable Cerbos authorization
+        enable_security_cluster: Whether to deploy security features
+        vector_store_default: Default vector store implementation
+        enable_mcp: Whether to enable management control plane
+        enable_adk: Whether to enable application development kit
+        github_org: GitHub organization for GitOps
+        auto_create_repos: Whether to automatically create Git repos
+        sync_policy: ArgoCD sync policy
+        domain: Base domain for the deployment
+        ip_pool_start: Start of IP address pool for services
+        ip_pool_end: End of IP address pool for services
+        overrides: Additional configuration overrides
+    """
     
     # Core deployment settings
     project_name: str = "vectorweight-homelab"
