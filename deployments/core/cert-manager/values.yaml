@@ -1,0 +1,96 @@
+# Cert-Manager Configuration
+installCRDs: true
+
+image:
+  repository: quay.io/jetstack/cert-manager-controller
+  tag: "${versions.cert_manager}"
+  pullPolicy: IfNotPresent
+
+prometheus:
+  enabled: true
+  servicemonitor:
+    enabled: true
+    prometheusInstance: monitoring
+
+webhook:
+  timeoutSeconds: 30
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+cainjector:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"
+
+nodeSelector:
+  kubernetes.io/os: linux
+
+tolerations:
+  - key: "node-role.kubernetes.io/master"
+    operator: "Exists"
+    effect: "NoSchedule"
+  - key: "node-role.kubernetes.io/control-plane"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+podSecurityPolicy:
+  enabled: true
+
+# Default ClusterIssuer configurations
+clusterIssuers:
+  - name: selfsigned-issuer
+    spec:
+      selfSigned: {}
+  
+  - name: letsencrypt-staging
+    spec:
+      acme:
+        email: "${security.tls.email}"
+        privateKeySecretRef:
+          name: letsencrypt-staging
+        server: https://acme-staging-v02.api.letsencrypt.org/directory
+        solvers:
+          - http01:
+              ingress:
+                class: nginx
+  
+  - name: letsencrypt-prod
+    spec:
+      acme:
+        email: "${security.tls.email}"
+        privateKeySecretRef:
+          name: letsencrypt-prod
+        server: https://acme-v02.api.letsencrypt.org/directory
+        solvers:
+          - http01:
+              ingress:
+                class: nginx
+
+# Default Certificate
+certificates:
+  - name: wildcard-cert
+    namespace: cert-manager
+    secretName: wildcard-tls
+    issuerRef:
+      name: selfsigned-issuer
+      kind: ClusterIssuer
+    dnsNames:
+      - "${domain}"
+      - "*.${domain}"

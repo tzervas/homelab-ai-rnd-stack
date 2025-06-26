@@ -1,0 +1,159 @@
+# Global Configuration Values for Homelab AI R&D Stack
+
+# Environment Configuration
+environment: "homelab"
+domain: "homelab.lan"
+
+# Network Configuration
+network:
+  metallb:
+    enabled: true
+    addresses:
+      - "192.168.1.200-192.168.1.210"
+  ingress:
+    class: "nginx"
+    enabled: true
+    default_ssl: true
+
+# Storage Configuration
+storage:
+  default_class: "local-path"
+  paths:
+    data: "/mnt/k8s-data"
+    fast: "/mnt/nvme-data"
+
+# Security Configuration
+security:
+  network_policies: true
+  tls:
+    enabled: true
+    default_issuer: "selfsigned-issuer"
+  rbac:
+    default_user_role: "view"
+    admin_role: "cluster-admin"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  prometheus:
+    retention:
+      time: "15d"
+      size: "10GB"
+    scrape_interval: "30s"
+  grafana:
+    persistence:
+      enabled: true
+      size: "5Gi"
+
+# Resource Profiles
+# Base allocations with 1.5x limit multiplier for burst capacity
+resources:
+  # Minimal services (monitoring agents, sidecars)
+  micro:
+    requests:
+      cpu: "50m"      # 0.05 core minimum
+      memory: "64Mi"  # 64MB minimum
+    limits:
+      cpu: "200m"     # Up to 0.2 core
+      memory: "128Mi" # Up to 128MB
+
+  # Basic services (web UIs, small APIs)
+  small:
+    requests:
+      cpu: "200m"      # 0.2 core minimum
+      memory: "256Mi"  # 256MB minimum
+    limits:
+      cpu: "500m"      # Up to 0.5 core
+      memory: "512Mi"  # Up to 512MB
+
+  # Standard services (GitLab runners, databases)
+  medium:
+    requests:
+      cpu: "500m"     # 0.5 core minimum
+      memory: "1Gi"   # 1GB minimum
+    limits:
+      cpu: "1000m"    # Up to 1 core
+      memory: "2Gi"   # Up to 2GB
+
+  # Large services (GitLab CE, JupyterLab)
+  large:
+    requests:
+      cpu: "1000m"    # 1 core minimum
+      memory: "2Gi"   # 2GB minimum
+    limits:
+      cpu: "2000m"    # Up to 2 cores
+      memory: "4Gi"   # Up to 4GB
+
+  # AI/ML workloads (Ollama, heavy computation)
+  xl:
+    requests:
+      cpu: "2000m"    # 2 cores minimum
+      memory: "4Gi"   # 4GB minimum
+    limits:
+      cpu: "4000m"    # Up to 4 cores
+      memory: "8Gi"   # Up to 8GB
+
+  # GPU-enabled workloads
+  gpu:
+    requests:
+      cpu: "2000m"    # 2 cores minimum
+      memory: "8Gi"   # 8GB minimum
+    limits:
+      cpu: "4000m"    # Up to 4 cores
+      memory: "16Gi"  # Up to 16GB
+    gpu:
+      requests:
+        nvidia.com/gpu: 1
+      limits:
+        nvidia.com/gpu: 1
+
+# Component-specific resource defaults
+defaults:
+  gitlab:
+    main:
+      resources: large
+    runner:
+      resources: medium
+    registry:
+      resources: medium
+  
+  jupyter:
+    hub:
+      resources: medium
+    singleuser:
+      resources: large
+      gpu_enabled:
+        resources: gpu
+  
+  ollama:
+    server:
+      resources: xl
+      gpu_enabled:
+        resources: gpu
+    webui:
+      resources: small
+  
+  monitoring:
+    prometheus:
+      resources: large
+    grafana:
+      resources: small
+    alertmanager:
+      resources: small
+    nodeExporter:
+      resources: micro
+    kubeStateMetrics:
+      resources: small
+
+# Component Versions
+versions:
+  k3s: "v1.28.5+k3s1"
+  metallb: "v0.13.12"
+  nginx_ingress: "v1.9.5"
+  cert_manager: "v1.13.3"
+  gitlab: "16.6.0-ce.0"
+  jupyterlab: "4.1.2"
+  ollama: "0.1.27"
+  ollama_webui: "0.1.27"
+  prometheus: "2.45.3"
+  grafana: "10.2.3"

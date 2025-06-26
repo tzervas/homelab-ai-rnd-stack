@@ -1,0 +1,103 @@
+# NGINX Ingress Controller Configuration
+controller:
+  name: controller
+  image:
+    repository: registry.k8s.io/ingress-nginx/controller
+    tag: "${versions.nginx_ingress}"
+    pullPolicy: IfNotPresent
+
+  config:
+    use-forwarded-headers: "true"
+    proxy-buffer-size: "16k"
+    client-header-buffer-size: "16k"
+    large-client-header-buffers: "4 16k"
+    enable-modsecurity: "true"
+    enable-owasp-modsecurity-crs: "true"
+    use-proxy-protocol: "false"
+    use-gzip: "true"
+    gzip-types: "application/json application/javascript text/css text/html text/plain text/xml"
+
+  publishService:
+    enabled: true
+
+  service:
+    enabled: true
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/address-pool: default
+    ports:
+      http: 80
+      https: 443
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+
+  admissionWebhooks:
+    enabled: true
+    patch:
+      enabled: true
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  tolerations:
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - ingress-nginx
+            topologyKey: kubernetes.io/hostname
+
+defaultBackend:
+  enabled: true
+  image:
+    repository: registry.k8s.io/defaultbackend-amd64
+    tag: "1.5"
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: true
+
+podSecurityPolicy:
+  enabled: false

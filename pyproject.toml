@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vectorweight-homelab"
+version = "0.1.0"
+description = "Kubernetes GitOps automation for AI/ML homelabs - Minimal PoC"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Tyler Zervas", email = "tyler@vectorweight.com"}
+]
+maintainers = [
+    {name = "Tyler Zervas", email = "tyler@vectorweight.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+keywords = ["kubernetes", "gitops", "homelab", "ai", "ml", "automation", "helm", "argocd"]
+dependencies = [
+    "click>=8.0.0",
+    "PyYAML>=6.0",
+    "requests>=2.28.0",
+    "jinja2>=3.1.0",
+    "pathlib>=1.0.1",
+]
+requires-python = ">=3.12"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/tzervas/homelab-ai-rnd-stack"
+Repository = "https://github.com/tzervas/homelab-ai-rnd-stack.git"
+"Bug Tracker" = "https://github.com/tzervas/homelab-ai-rnd-stack/issues"
+
+[project.scripts]
+vectorweight = "vectorweight.cli.main:cli"
+
+[tool.setuptools.packages.find]
+include = ["vectorweight*"]
+exclude = ["tests*", "cluster-snek*"]
+
+[tool.setuptools.package-data]
+vectorweight = ["*.yaml", "*.yml", "*.json", "templates/*"]
+
+# Black configuration
+[tool.black]
+line-length = 100
+target-version = ['py312']
+include = '\.pyi?$'
+
+# isort configuration
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+
+# mypy configuration
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

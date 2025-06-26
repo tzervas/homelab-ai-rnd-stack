@@ -1,0 +1,209 @@
+# JupyterLab Configuration
+hub:
+  config:
+    Authenticator:
+      admin_users:
+        - admin
+    JupyterHub:
+      authenticator_class: dummy  # For initial setup, can be changed to proper auth later
+      admin_access: true
+      allow_named_servers: true
+      
+  service:
+    type: ClusterIP
+    annotations: {}
+
+  db:
+    type: sqlite-pvc
+    pvc:
+      storage: 1Gi
+      storageClassName: "${storage.default_class}"
+
+  networkPolicy:
+    enabled: true
+    ingressRules:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+
+singleuser:
+  image:
+    name: jupyter/datascience-notebook
+    tag: "${versions.jupyterlab}"
+    pullPolicy: IfNotPresent
+  
+  profileList:
+    - display_name: "AI Development Environment"
+      description: "Full data science stack with Ollama integration"
+      default: true
+      kubespawner_override:
+        cpu_limit: 4
+        cpu_guarantee: 1
+        mem_limit: "8G"
+        mem_guarantee: "2G"
+        image: jupyter/datascience-notebook:${versions.jupyterlab}
+        environment:
+          OLLAMA_HOST: "http://ollama.ollama:11434"
+          JUPYTER_ENABLE_LAB: "yes"
+        extra_containers:
+          - name: ollama-sidecar
+            image: alpine/socat
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                socat TCP-LISTEN:11434,fork TCP:ollama.ollama:11434
+            ports:
+              - containerPort: 11434
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "200m"
+                memory: "128Mi"
+    
+    - display_name: "GPU-Enabled Environment"
+      description: "AI Development with GPU support"
+      kubespawner_override:
+        cpu_limit: 8
+        cpu_guarantee: 2
+        mem_limit: "16G"
+        mem_guarantee: "4G"
+        extra_resource_limits:
+          nvidia.com/gpu: "1"
+        image: jupyter/datascience-notebook:${versions.jupyterlab}
+        environment:
+          OLLAMA_HOST: "http://ollama.ollama:11434"
+          JUPYTER_ENABLE_LAB: "yes"
+          CUDA_VISIBLE_DEVICES: "all"
+        extra_containers:
+          - name: ollama-sidecar
+            image: alpine/socat
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                socat TCP-LISTEN:11434,fork TCP:ollama.ollama:11434
+            ports:
+              - containerPort: 11434
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "200m"
+                memory: "128Mi"
+
+  storage:
+    dynamic:
+      storageClass: "${storage.default_class}"
+    capacity: 10Gi
+    homeMountPath: /home/jovyan/work
+
+  startTimeout: 300
+
+  lifecycleHooks:
+    postStart:
+      exec:
+        command:
+          - "sh"
+          - "-c"
+          - |
+            pip install --quiet \
+              ollama \
+              transformers \
+              torch \
+              tensorflow \
+              scikit-learn \
+              pandas \
+              numpy \
+              matplotlib \
+              seaborn \
+              jupyterlab-git \
+              ipywidgets \
+              tqdm
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"  # Disable client_max_body_size
+  hosts:
+    - jupyter.${domain}
+  tls:
+    - secretName: jupyter-tls
+      hosts:
+        - jupyter.${domain}
+
+scheduling:
+  userScheduler:
+    enabled: true
+  podPriority:
+    enabled: true
+  userPlaceholder:
+    enabled: true
+    replicas: 1
+
+prePuller:
+  hook:
+    enabled: true
+  continuous:
+    enabled: true
+
+debug:
+  enabled: false
+
+proxy:
+  service:
+    type: ClusterIP
+  chp:
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "400m"
+        memory: "512Mi"
+
+# Custom network policies to allow Ollama access
+customNetworkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ollama
+      - podSelector:
+          matchLabels:
+            app: ollama
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+
+# Custom init container to verify Ollama connectivity
+initContainers:
+  - name: wait-for-ollama
+    image: curlimages/curl
+    command:
+      - sh
+      - -c
+      - |
+        until curl -s http://ollama.ollama:11434/api/tags >/dev/null 2>&1; do
+          echo "Waiting for Ollama API..."
+          sleep 2
+        done
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"

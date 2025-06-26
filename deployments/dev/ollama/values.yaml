@@ -1,0 +1,149 @@
+# Ollama Service Configuration
+service:
+  name: ollama
+  version: "${versions.ollama}"
+  image: ollama/ollama
+  port: 11434
+  nodePort: 31434  # For direct node access if needed
+
+# Deployment Configuration
+deployment:
+  replicas: 1  # Single instance for homelab
+  resources:
+    requests:
+      cpu: "2000m"      # 2 cores
+      memory: "4Gi"     # 4GB RAM
+    limits:
+      cpu: "4000m"      # 4 cores
+      memory: "8Gi"     # 8GB RAM
+  
+  # GPU Configuration (if available)
+  gpu:
+    enabled: true
+    type: "nvidia.com/gpu"
+    count: 1
+
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+  volumeMounts:
+    - name: models
+      mountPath: /root/.ollama  # Default model storage location
+    - name: tmp
+      mountPath: /tmp
+
+# Persistent Storage
+persistence:
+  models:
+    enabled: true
+    storageClass: "${storage.default_class}"
+    size: 50Gi
+    accessMode: ReadWriteOnce
+
+# Service Configuration
+networking:
+  service:
+    type: ClusterIP
+    port: 11434
+  
+  ingress:
+    enabled: false  # No direct ingress, accessed through Web UI
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: jupyter
+        - podSelector:
+            matchLabels:
+              app: jupyter
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ollama
+        - podSelector:
+            matchLabels:
+              app: ollama-webui
+
+# Monitoring
+monitoring:
+  metrics:
+    enabled: true
+    port: 9100
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+
+---
+# Ollama Web UI Configuration
+webui:
+  name: ollama-webui
+  version: "${versions.ollama_webui}"
+  image: ghcr.io/ollama-webui/ollama-webui
+  
+  deployment:
+    replicas: 1
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+    securityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+
+    env:
+      - name: OLLAMA_API_HOST
+        value: "http://ollama:11434"
+      - name: DEFAULT_MODELS
+        value: "llama2,codellama,mistral"
+      - name: DISABLE_TELEMETRY
+        value: "true"
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    hosts:
+      - host: "ollama.${domain}"
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: ollama-webui-tls
+        hosts:
+          - "ollama.${domain}"
+
+  networkPolicy:
+    enabled: true
+    ingressRules:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+
+  monitoring:
+    metrics:
+      enabled: true
+      port: 9100
+    serviceMonitor:
+      enabled: true
+      interval: 30s

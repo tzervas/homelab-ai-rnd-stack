@@ -1,0 +1,262 @@
+# Monitoring Stack Configuration
+
+# Prometheus Configuration
+prometheus:
+  enabled: true
+  alertmanager:
+    enabled: true
+    resources: ${resources.small}
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: "${storage.default_class}"
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+      hosts:
+        - "alertmanager.${domain}"
+      tls:
+        - secretName: alertmanager-tls
+          hosts:
+            - "alertmanager.${domain}"
+  
+  server:
+    resources: ${resources.large}
+    retention: "${monitoring.prometheus.retention.time}"
+    retentionSize: "${monitoring.prometheus.retention.size}"
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+      storageClass: "${storage.default_class}"
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+      hosts:
+        - "prometheus.${domain}"
+      tls:
+        - secretName: prometheus-tls
+          hosts:
+            - "prometheus.${domain}"
+  
+  pushgateway:
+    enabled: true
+    resources: ${resources.small}
+  
+  nodeExporter:
+    enabled: true
+    resources: ${resources.micro}
+  
+  kubeStateMetrics:
+    enabled: true
+    resources: ${resources.small}
+
+# Grafana Configuration
+grafana:
+  enabled: true
+  resources: ${resources.small}
+  persistence:
+    enabled: true
+    size: "${monitoring.grafana.persistence.size}"
+    storageClass: "${storage.default_class}"
+  
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+    hosts:
+      - "grafana.${domain}"
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - "grafana.${domain}"
+  
+  # Initial admin password (change on first login)
+  adminPassword: "admin"
+  
+  # Default dashboards
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: "default"
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  
+  dashboards:
+    default:
+      kubernetes-cluster:
+        url: https://grafana.com/api/dashboards/315/revisions/3/download
+        datasource: Prometheus
+      node-exporter:
+        url: https://grafana.com/api/dashboards/1860/revisions/23/download
+        datasource: Prometheus
+      gitlab-overview:
+        url: https://grafana.com/api/dashboards/13922/revisions/1/download
+        datasource: Prometheus
+      ollama-metrics:
+        file: dashboards/ollama-metrics.json
+      jupyter-metrics:
+        file: dashboards/jupyter-metrics.json
+  
+  # Datasources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server
+          access: proxy
+          isDefault: true
+  
+  # Plugins
+  plugins:
+    - grafana-piechart-panel
+    - grafana-clock-panel
+    - grafana-worldmap-panel
+    - grafana-kubernetes-app
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  prometheusRules:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ollama
+      - podSelector:
+          matchLabels:
+            app: ollama
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: jupyter
+      - podSelector:
+          matchLabels:
+            app: jupyter
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gitlab
+      - podSelector:
+          matchLabels:
+            app: gitlab
+
+# Custom Prometheus Rules
+serverFiles:
+  alerts:
+    groups:
+      - name: kubernetes
+        rules:
+          - alert: KubernetesPodCrashLooping
+            expr: kube_pod_container_status_restarts_total > 5
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.pod }} is crash looping"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping"
+      
+      - name: node
+        rules:
+          - alert: NodeHighCPU
+            expr: avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance) < 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU usage on {{ $labels.instance }}"
+              description: "CPU usage is above 90% on {{ $labels.instance }}"
+          
+          - alert: NodeHighMemory
+            expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage on {{ $labels.instance }}"
+              description: "Memory usage is above 90% on {{ $labels.instance }}"
+      
+      - name: gitlab
+        rules:
+          - alert: GitLabSlowHTTPResponse
+            expr: gitlab_http_request_duration_seconds > 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "GitLab slow HTTP response"
+              description: "GitLab is responding slowly to HTTP requests"
+      
+      - name: ollama
+        rules:
+          - alert: OllamaHighMemory
+            expr: container_memory_usage_bytes{container="ollama"} > 7516192768  # 7GB
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory usage in Ollama"
+              description: "Ollama container is using more than 7GB of memory"
+
+# Custom Grafana Dashboards
+grafanaDashboardFiles:
+  ollama-metrics.json: |
+    {
+      "title": "Ollama Metrics",
+      "panels": [
+        {
+          "title": "Memory Usage",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "container_memory_usage_bytes{container=\"ollama\"}"
+            }
+          ]
+        },
+        {
+          "title": "GPU Utilization",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "nvidia_gpu_duty_cycle"
+            }
+          ]
+        }
+      ]
+    }
+  
+  jupyter-metrics.json: |
+    {
+      "title": "JupyterHub Metrics",
+      "panels": [
+        {
+          "title": "Active Users",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "jupyterhub_running_servers"
+            }
+          ]
+        },
+        {
+          "title": "Server Memory Usage",
+          "type": "graph",
+          "targets": [
+            {
+              "expr": "container_memory_usage_bytes{container=~\"jupyter.*\"}"
+            }
+          ]
+        }
+      ]
+    }

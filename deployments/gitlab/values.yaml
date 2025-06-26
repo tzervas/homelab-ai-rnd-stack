@@ -1,0 +1,222 @@
+# GitLab CE Configuration
+global:
+  edition: ce
+  hosts:
+    domain: "${domain}"
+    https: true
+    gitlab:
+      name: "gitlab.${domain}"
+      https: true
+    registry:
+      name: "registry.${domain}"
+      https: true
+    minio:
+      name: "minio.${domain}"
+      https: true
+  
+  initialRootPassword:
+    secret: gitlab-initial-root-password
+    key: password
+
+  time_zone: UTC
+  gitlab:
+    license:
+      type: Community
+
+# GitLab application configuration
+gitlab:
+  toolbox:
+    enabled: true
+    resources: ${resources.small}
+    persistence:
+      enabled: true
+      size: 2Gi
+
+  webservice:
+    enabled: true
+    resources: ${resources.large}
+    maxReplicas: 2
+    minReplicas: 1
+    ingress:
+      enabled: true
+      tls:
+        enabled: true
+        secretName: gitlab-webservice-tls
+      annotations:
+        cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+        nginx.ingress.kubernetes.io/proxy-body-size: "512m"
+
+  sidekiq:
+    enabled: true
+    resources: ${resources.medium}
+    maxReplicas: 2
+    minReplicas: 1
+
+  gitlab-shell:
+    enabled: true
+    resources: ${resources.small}
+    maxReplicas: 2
+    minReplicas: 1
+
+# Container Registry
+registry:
+  enabled: true
+  resources: ${resources.medium}
+  storage:
+    secret: gitlab-registry-storage
+    key: config
+  ingress:
+    enabled: true
+    tls:
+      enabled: true
+      secretName: gitlab-registry-tls
+    annotations:
+      cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+      nginx.ingress.kubernetes.io/proxy-body-size: "512m"
+
+# Shared GitLab application settings
+shared:
+  # Git data persistence
+  gitaly:
+    enabled: true
+    resources: ${resources.large}
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: "${storage.default_class}"
+
+# Runners Configuration
+gitlab-runner:
+  enabled: true
+  rbac:
+    create: true
+  
+  runners:
+    config: |
+      [[runners]]
+        [runners.kubernetes]
+          namespace = "{{.Release.Namespace}}"
+          image = "ubuntu:22.04"
+          privileged = false
+          [[runners.kubernetes.volumes.empty_dir]]
+            name = "docker-certs"
+            mount_path = "/certs/client"
+            medium = "Memory"
+          [runners.kubernetes.node_selector]
+            "kubernetes.io/os" = "linux"
+        
+        # Default runner template
+        [[runners]]
+          name = "default-runner"
+          executor = "kubernetes"
+          [runners.kubernetes]
+            cpu_request = "500m"
+            cpu_limit = "1000m"
+            memory_request = "1Gi"
+            memory_limit = "2Gi"
+            helper_cpu_request = "100m"
+            helper_cpu_limit = "200m"
+            helper_memory_request = "128Mi"
+            helper_memory_limit = "256Mi"
+            service_cpu_request = "100m"
+            service_cpu_limit = "200m"
+            service_memory_request = "128Mi"
+            service_memory_limit = "256Mi"
+        
+        # GPU-enabled runner template
+        [[runners]]
+          name = "gpu-runner"
+          executor = "kubernetes"
+          [runners.kubernetes]
+            cpu_request = "2000m"
+            cpu_limit = "4000m"
+            memory_request = "8Gi"
+            memory_limit = "16Gi"
+            helper_cpu_request = "100m"
+            helper_cpu_limit = "200m"
+            helper_memory_request = "128Mi"
+            helper_memory_limit = "256Mi"
+            [runners.kubernetes.node_selector]
+              "nvidia.com/gpu" = "present"
+        
+        # Docker-in-Docker runner template
+        [[runners]]
+          name = "dind-runner"
+          executor = "kubernetes"
+          [runners.kubernetes]
+            privileged = true
+            cpu_request = "1000m"
+            cpu_limit = "2000m"
+            memory_request = "2Gi"
+            memory_limit = "4Gi"
+            [runners.kubernetes.volumes.empty_dir]
+              name = "docker-certs"
+              mount_path = "/certs/client"
+              medium = "Memory"
+
+  resources: ${resources.medium}
+  
+  # Runner registration
+  registration:
+    token:
+      secret: gitlab-runner-registration
+      key: runner-registration-token
+  
+  securityContext:
+    fsGroup: 65533
+    runAsUser: 100
+  
+  rbac:
+    serviceAccountName: gitlab-runner
+    create: true
+    rules:
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["list", "get", "watch", "create", "delete"]
+      - apiGroups: [""]
+        resources: ["pods/exec"]
+        verbs: ["create"]
+      - apiGroups: [""]
+        resources: ["pods/log"]
+        verbs: ["get"]
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingressRules:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring
+      - podSelector:
+          matchLabels:
+            app: prometheus
+
+# Monitoring Integration
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: prometheus
+
+# Backup Configuration
+backup:
+  enabled: true
+  cron: "0 2 * * *"  # Daily at 2 AM
+  storage:
+    class: "${storage.default_class}"
+    size: 20Gi
+  
+  # Backup retention
+  retention:
+    days: 7
+    weeks: 4
+    months: 3

@@ -1,0 +1,43 @@
+# MetalLB Configuration Values
+metallb:
+  enabled: true
+  mode: "layer2"
+  configInline:
+    address-pools:
+      - name: default
+        protocol: layer2
+        addresses:
+          - "${metallb_ip_range}"  # Replaced by global value
+
+  prometheus:
+    serviceMonitor:
+      enabled: true
+
+  controller:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+
+  speaker:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "128Mi"
+    
+    tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+
+    nodeSelector:
+      kubernetes.io/os: linux

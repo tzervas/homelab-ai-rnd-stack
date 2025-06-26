@@ -1,0 +1,174 @@
+# ArgoCD Configuration
+global:
+  domain: "argocd.${domain}"
+
+server:
+  extraArgs:
+    - --insecure
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "${security.tls.default_issuer}"
+    hosts:
+      - "argocd.${domain}"
+    tls:
+      - secretName: argocd-server-tls
+        hosts:
+          - "argocd.${domain}"
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+repoServer:
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "400m"
+      memory: "512Mi"
+
+applicationSet:
+  enabled: true
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "400m"
+      memory: "512Mi"
+
+controller:
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "400m"
+      memory: "512Mi"
+
+redis:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+dex:
+  enabled: false
+
+notifications:
+  enabled: true
+
+# Common configuration
+common:
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  tolerations:
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+# RBAC configuration
+rbac:
+  policy.default: role:readonly
+  policy.csv: |
+    p, role:org-admin, applications, *, */*, allow
+    p, role:org-admin, clusters, *, *, allow
+    p, role:org-admin, projects, *, *, allow
+    p, role:org-admin, repositories, *, *, allow
+    p, role:org-admin, certificates, *, *, allow
+    p, role:org-admin, accounts, *, *, allow
+
+    g, cluster-admins, role:admin
+
+# Initial Applications
+applicationSets:
+  - name: core-services
+    generators:
+      - list:
+          elements:
+            - cluster: in-cluster
+              group: core
+              services:
+                - metallb
+                - ingress-nginx
+                - cert-manager
+
+  - name: ai-development
+    generators:
+      - list:
+          elements:
+            - cluster: in-cluster
+              group: dev
+              services:
+                - ollama
+                - jupyter
+              options:
+                wait: true
+                timeout: 600
+    template:
+      metadata:
+        name: "{{.service}}"
+        namespace: argocd
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        project: default
+        source:
+          repoURL: "${git.repo_url}"
+          targetRevision: HEAD
+          path: "deployments/{{.group}}/{{.service}}"
+        destination:
+          server: "{{.cluster}}"
+          namespace: "{{.service}}"
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          syncOptions:
+            - CreateNamespace=true
+          retry:
+            limit: 5
+            backoff:
+              duration: 5s
+              factor: 2
+              maxDuration: 3m
+    template:
+      metadata:
+        name: "{{.service}}"
+        namespace: argocd
+        finalizers:
+          - resources-finalizer.argocd.argoproj.io
+      spec:
+        project: default
+        source:
+          repoURL: "${git.repo_url}"
+          targetRevision: HEAD
+          path: "deployments/{{.group}}/{{.service}}"
+        destination:
+          server: "{{.cluster}}"
+          namespace: "{{.service}}"
+        syncPolicy:
+          automated:
+            prune: true
+            selfHeal: true
+          syncOptions:
+            - CreateNamespace=true
