@@ -2,7 +2,7 @@
 param(
     [string]$Host = "localhost",
     [string]$Domain = "homelab.lan",
-    [string]$MetalLBRange = "192.168.1.200-192.168.1.210",
+    [string]$MetalLBRange = "192.168.0.200-192.168.0.210",
     [string]$StoragePath = "/mnt/k8s-data",
     [string]$K3sVersion = "v1.28.5+k3s1",
     [switch]$Initialize

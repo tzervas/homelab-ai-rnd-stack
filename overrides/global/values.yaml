@@ -9,7 +9,7 @@ network:
   metallb:
     enabled: true
     addresses:
-      - "192.168.1.200-192.168.1.210"
+      - "192.168.0.200-192.168.0.210"  # Update this range based on your network
   ingress:
     class: "nginx"
     enabled: true
